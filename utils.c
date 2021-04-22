@@ -34,7 +34,7 @@ int get_branch_offset(Instruction instruction) {
 
 	offset |= (instruction.sbtype.imm7 << 6) & 0x00001000; 
 
-	return sign_extend_number(offset, 13);
+	return bitSigner(offset, 13);
 }
 
 
@@ -49,7 +49,7 @@ int get_jump_offset(Instruction instruction) {
 
 	offset |= (instruction.ujtype.imm << 2) & 0x00100000;
 
-	return sign_extend_number(offset, 21);
+	return bitSigner(offset, 21);
 }
 
 
@@ -60,7 +60,7 @@ int get_store_offset(Instruction instruction) {
 
 	offset |= (instruction.stype.imm7 << 5) & 0x00000fe0; 
 
-	return sign_extend_number(offset, 12);
+	return bitSigner(offset, 12);
 
 }
 
