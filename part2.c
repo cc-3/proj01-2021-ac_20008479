@@ -108,12 +108,37 @@ void execute_rtype(Instruction instruction, Processor *processor) {
                 // xor
                 processor->R[instruction.rtype.rd] = processor->R[instruction.rtype.rs1] ^
                 processor->R[instruction.rtype.rs2];
-            } else {
-                // div
-                processor->R[instruction.rtype.rd] = (Word) (((sWord)
-                    processor->R[instruction.rtype.rs1]) / ((sWord)
-                    processor->R[instruction.rtype.rs2]));
-            }
+            } else if(instruction.rtype.funct7 == 0x01){
+
+                int rs1 = processor->R[instruction.rtype.rs1];
+                int  rs2 = processor->R[instruction.rtype.rs2];
+
+                if (rs2 == 0) {
+                    processor->R[instruction.rtype.rd] = -1;                // division entre cero
+                    processor->PC += 4;
+                    break;
+
+                } 
+
+                else if (rs1 == 0x80000000 && rs2 == 0xffffffff ) {
+                    processor->R[instruction.rtype.rd] = rs1;               // overflow
+                    processor->PC += 4;
+                    break;
+                } 
+
+
+                else {
+                    processor->R[instruction.rtype.rd] = rs1 / rs2;
+                    processor->PC += 4;
+                    break;
+
+                }
+      }
+
+
+
+                
+            
             break;
 
         case 0x5:
@@ -134,11 +159,28 @@ void execute_rtype(Instruction instruction, Processor *processor) {
                 // or
                 processor->R[instruction.rtype.rd] = processor->R[instruction.rtype.rs1] |
                 processor->R[instruction.rtype.rs2];
-            } else {
+            } 
                 // rem
-                processor->R[instruction.rtype.rd] = (Word) (((sWord)
-                    processor->R[instruction.rtype.rs1]) % ((sWord)
-                    processor->R[instruction.rtype.rs2]));
+            else if(instruction.rtype.funct7 == 0x01){
+                int rs1 = processor->R[instruction.rtype.rs1];
+                int  rs2 = processor->R[instruction.rtype.rs2];
+
+                if (rs2 == 0) {
+                    processor->R[instruction.rtype.rd] = rs1;   
+
+                }
+
+                else if (rs1 == -2147483648 && rs2 == -1) {
+                    processor->R[instruction.rtype.rd] = 0;
+
+                }
+
+                else{
+                    processor->R[instruction.rtype.rd] = rs1%rs2;
+                }
+
+                processor->PC+=4;
+                break;
             }
             break;
 
@@ -240,24 +282,80 @@ void execute_ecall(Processor *p, Byte *memory) {
 
 
 void execute_branch(Instruction instruction, Processor *processor) {
-  int branchaddr;
-    branchaddr = 4;
+  int banchcharrs;
+  banchcharrs = 4;
     /* Remember that the immediate portion of branches
        is counting half-words, so make sure to account for that. */
     switch(instruction.sbtype.funct3) { // What do we switch on?
         /* YOUR CODE HERE */
         case 0x0:
-            //beq
-            if (processor->R[instruction.sbtype.rs1] == processor->R[instruction.sbtype.rs2]) {
-                branchaddr = (sHalf) get_branch_offset(instruction);
-            }
+        if(processor->R[instruction.sbtype.rs1] == processor->R[instruction.sbtype.rs2]){
+            banchcharrs = (sHalf) get_branch_offset(instruction);
+        }
+        break;
+
+        case 0x1:
+        if(processor->R[instruction.sbtype.rs1] != processor->R[instruction.sbtype.rs2]){
+            banchcharrs = (sHalf) get_branch_offset(instruction);
+        }
+        break;
+
+        default:
+            handle_invalid_instruction(instruction);
+            exit(-1);
+            break;
+      
+    }
+   processor->PC += banchcharrs;
+}
+
+
+void execute_load(Instruction instruction, Processor *processor, Byte *memory) {
+  switch(instruction.itype.funct3) { // What do we switch on?
+        /* YOUR CODE HERE */
+        case 0x0:
+            // lb
+            processor->R[instruction.itype.rd] = bitSigner(load(memory, ((sWord)processor->R[instruction.itype.rs1]) + ((sWord) bitSigner(instruction.itype.imm, 12)), LENGTH_BYTE, 0),  8);
             break;
 
         case 0x1:
-            //bne
-            if (processor->R[instruction.sbtype.rs1] != processor->R[instruction.sbtype.rs2]) {
-                branchaddr = (sHalf) get_branch_offset(instruction);
-            }
+            // lh
+            processor->R[instruction.itype.rd] = bitSigner(load(memory, ((sWord)
+                processor->R[instruction.itype.rs1]) + ((sWord)
+                bitSigner(instruction.itype.imm, 12)), LENGTH_HALF_WORD, 1), 16);
+            break;
+
+        case 0x2:
+            // lw
+            processor->R[instruction.itype.rd] = load(memory, ((sWord)
+                processor->R[instruction.itype.rs1]) + ((sWord)
+                bitSigner(instruction.itype.imm, 12)), LENGTH_WORD,0);
+            break;
+
+        default:
+            handle_invalid_instruction(instruction);
+            break;
+    }
+    processor->PC += 4;
+}
+
+
+void execute_store(Instruction instruction, Processor *processor, Byte *memory) {
+   switch(instruction.stype.funct3) { // What do we switch on?
+        /* YOUR CODE HERE */
+        case 0x0:
+            // sb
+            store(memory, ((sWord) processor->R[instruction.stype.rs1]) + ((sWord) get_store_offset(instruction)), LENGTH_BYTE, processor->R[instruction.stype.rs2], 1 );
+            break;
+
+        case 0x1:
+            // sh
+            store(memory, ((sWord) processor->R[instruction.stype.rs1]) + ((sWord) get_store_offset(instruction)), LENGTH_HALF_WORD, processor->R[instruction.stype.rs2], 1);
+            break;
+
+        case 0x2:
+            // sw
+            store(memory, ((sWord) processor->R[instruction.stype.rs1]) + ((sWord) get_store_offset(instruction)), LENGTH_WORD, processor->R[instruction.stype.rs2], 1);
             break;
 
         default:
@@ -265,46 +363,32 @@ void execute_branch(Instruction instruction, Processor *processor) {
             exit(-1);
             break;
     }
-    processor->PC += branchaddr;
-}
-
-
-void execute_load(Instruction instruction, Processor *processor, Byte *memory) {
-  switch(0) { // What do we switch on?
-    /* YOUR CODE HERE */
-    default:
-      handle_invalid_instruction(instruction);
-      break;
-  }
-}
-
-
-void execute_store(Instruction instruction, Processor *processor, Byte *memory) {
-  switch(0) { // What do we switch on?
-    /* YOUR CODE HERE */
-    default:
-      handle_invalid_instruction(instruction);
-      exit(-1);
-      break;
-  }
+    processor->PC += 4;
 }
 
 
 void execute_jalr(Instruction instruction, Processor *processor) {
+    int nextPC =(sWord) processor->PC + bitSigner(get_jump_offset(instruction), 21);
   /* YOUR CODE HERE */
+  processor->R[instruction.itype.rd] = processor->PC + 4;  
+   processor->PC = nextPC;
+   
+
+
 }
 
 
 void execute_jal(Instruction instruction, Processor *processor) {
-   int nextPC =(sWord) processor->PC + bitSigner(get_jump_offset(instruction), 21);
-    /* YOUR CODE HERE */
-    processor->R[instruction.ujtype.rd] = processor->PC + 4;
-    processor->PC = nextPC;
+     //unsigned int rd = instruction.ujtype.rd;
+  processor->R[instruction.ujtype.rd] = processor->PC + 4;
+  processor->PC += get_jump_offset(instruction);
 }
 
 
 void execute_auipc(Instruction instruction, Processor *processor) {
-  /* YOUR CODE HERE */
+  processor->R[instruction.utype.rd] = processor->PC + ((Word)instruction.utype.imm << 12);
+  processor->PC += 4;
+
 }
 
 
